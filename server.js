@@ -1,5 +1,3 @@
-// server.js
-
 const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
@@ -8,78 +6,99 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const PORT = 3000;
+// Sua porta
+const PORT = 1000;
 
-// Onde a programação de rotas fica
+// Sua programação
 const programacao = [
-    ['08:39', 'ROTA 101'],
-    ['08:45', 'ROTA 205'],
-    ['09:00', 'ROTA 102 - MERCADO SUL'],
-    ['11:30', 'ROTA 310'],
-    ['13:00', 'ROTA 415 - CENTRO'],
-    ['14:45', 'ROTA 206'],
-    ['16:00', 'ROTA 501 - ZONA OESTE'],
-    ['17:30', 'ROTA 311']
+    ['19:00', 'ROTA 069/072'],
+    ['20:30', 'ROTA 039'],
+    ['22:00', 'ROTA 068/081-043/049'],
+    ['23:00', 'ROTA 029/055/026'],
+    ['23:50', 'ROTA 030/086'],
+    ['00:00', 'ROTA 035/037'],
+    ['00:15', 'ROTA 045/076'],
+    ['01:30', 'ROTA 007/036'],
+    ['02:30', 'ROTA 064/066'],
+    ['03:40', 'ROTA 044'],
+    ['04:00', 'ROTA 033/038'],
+    ['05:00', 'ROTA 006/034']
 ];
 
 app.use(express.static('public'));
 
-// ############# O QUE MUDOU #############
-// Agora temos duas variáveis para guardar o estado
-let rotaAtual = { nome: 'Aguardando...', horario: '' }; // Guarda a rota principal
-let rotasPassadas = []; // Guarda a lista de histórico
-// #########################################
+let rotaAtual = { nome: 'Aguardando...', horario: '' };
+let rotasPassadas = [];
+let horarioProximaRota = null;
 
 function verificarProximaRota() {
     const agora = new Date();
-    // Valor padrão caso nenhuma rota futura seja encontrada
-    let proximaRotaEncontrada = { nome: 'Rotas do dia finalizadas.', horario: '' };
+    
+    let proximaRotaEncontrada = null;
+    horarioProximaRota = null;
 
-    for (const rota of programacao) {
+    const programacaoOrdenada = [...programacao].sort((a, b) => a[0].localeCompare(b[0]));
+
+    // 1. Tenta encontrar a próxima rota para HOJE
+    for (const rota of programacaoOrdenada) {
         const [hora, minuto] = rota[0].split(':');
-        const horarioRota = new Date();
-        horarioRota.setHours(hora, minuto, 0, 0);
+        const horarioRotaHoje = new Date();
+        horarioRotaHoje.setHours(hora, minuto, 0, 0);
 
-        if (horarioRota >= agora) {
+        if (horarioRotaHoje >= agora) {
             proximaRotaEncontrada = { nome: rota[1], horario: `Saída às ${rota[0]}` };
-            break;
+            horarioProximaRota = horarioRotaHoje;
+            break; 
+        }
+    }
+
+    // 2. Se NENHUMA rota foi encontrada para hoje, pega a primeira do dia SEGUINTE
+    if (horarioProximaRota === null && programacaoOrdenada.length > 0) {
+        console.log('[FIM DO DIA] Nenhuma rota futura hoje. Pulando para o próximo dia.');
+        
+        const primeiraRotaDoDia = programacaoOrdenada[0];
+        const [hora, minuto] = primeiraRotaDoDia[0].split(':');
+        
+        const horarioRotaAmanha = new Date();
+        horarioRotaAmanha.setDate(agora.getDate() + 1);
+        horarioRotaAmanha.setHours(hora, minuto, 0, 0);
+
+        proximaRotaEncontrada = { nome: primeiraRotaDoDia[1], horario: `Saída às ${primeiraRotaDoDia[0]}` };
+        horarioProximaRota = horarioRotaAmanha;
+
+        if (rotasPassadas.length > 0) {
+            console.log('[NOVO CICLO] Histórico de rotas anunciadas foi reiniciado.');
+            rotasPassadas = [];
         }
     }
     
-    // ############# O QUE MUDOU #############
-    // Verifica se a rota principal mudou
+    if (proximaRotaEncontrada === null) {
+        proximaRotaEncontrada = { nome: 'Nenhuma rota na programação.', horario: '' };
+    }
+
+    const contagemMs = horarioProximaRota ? horarioProximaRota.getTime() - agora.getTime() : null;
+
     if (rotaAtual.nome !== proximaRotaEncontrada.nome) {
-        // Se a rotaAtual não for a mensagem inicial, adiciona ao histórico
-        if (!rotaAtual.nome.includes('Aguardando...')) {
-            // Adiciona no início da lista para a mais recente ficar no topo
+        if (!rotaAtual.nome.includes('Aguardando...') && !rotaAtual.nome.includes('Nenhuma rota')) {
             rotasPassadas.unshift(rotaAtual); 
         }
-
-        // Atualiza a rota principal
         rotaAtual = proximaRotaEncontrada;
-        console.log(`[ATUALIZAÇÃO] Próxima Rota: ${rotaAtual.nome}. Histórico agora tem ${rotasPassadas.length} itens.`);
-        
-        // Envia o objeto COMPLETO (próxima rota E histórico) para o painel
-        io.emit('atualizar-painel', {
-            proxima: rotaAtual,
-            passadas: rotasPassadas
-        });
+        console.log(`[ATUALIZAÇÃO DE ROTA] Próxima: ${rotaAtual.nome}`);
     }
-    // #########################################
+
+    io.emit('atualizar-painel', {
+        proxima: rotaAtual,
+        passadas: rotasPassadas,
+        contagemRegressiva: contagemMs
+    });
 }
 
 io.on('connection', (socket) => {
     console.log('Um painel se conectou!');
-    // ############# O QUE MUDOU #############
-    // Envia o estado completo para o novo painel não ficar dessincronizado
-    socket.emit('atualizar-painel', {
-        proxima: rotaAtual,
-        passadas: rotasPassadas
-    });
-    // #########################################
+    verificarProximaRota();
 });
 
 server.listen(PORT, () => {
-    console.log(`Servidor rodando na porta ${PORT}. Abra http://localhost:3000 no seu navegador.`);
+    console.log(`Servidor rodando na porta ${PORT}. Abra http://localhost:${PORT} no seu navegador.`);
     setInterval(verificarProximaRota, 1000); 
 });
