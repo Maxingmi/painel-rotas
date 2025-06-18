@@ -1,9 +1,8 @@
-// server.js - Versão para Vercel (sem socket.io e sem static)
+// server.js - Versão com correção de fuso horário para Vercel
 
 const express = require('express');
 const app = express();
 
-// A programação de rotas continua a mesma
 const programacao = [
     ['19:00', 'ROTA 069/072'], ['20:30', 'ROTA 039'], ['22:00', 'ROTA 068/081-043/049'],
     ['23:00', 'ROTA 029/055/026'], ['23:50', 'ROTA 030/086'], ['00:00', 'ROTA 035/037'],
@@ -11,35 +10,53 @@ const programacao = [
     ['03:40', 'ROTA 044'], ['04:00', 'ROTA 033/038'], ['05:00', 'ROTA 006/034']
 ];
 
-// Função para obter a hora de São Paulo (UTC-3)
-function getSaoPauloTime() {
-    const agora = new Date();
-    return new Date(agora.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-}
-
 // Função que calcula a rota atual e as passadas.
 function calcularStatusRotas() {
-    const agora = getSaoPauloTime();
+    // Pega a data e hora atual. Nos servidores da Vercel, isto será em UTC.
+    const agora = new Date();
+
+    // Para obter a data (dia, mês, ano) de hoje em São Paulo, usamos Intl.DateTimeFormat.
+    // Isto evita erros de parsing de strings de data.
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).formatToParts(agora);
+
+    const ano = parts.find(p => p.type === 'year').value;
+    const mes = parts.find(p => p.type === 'month').value;
+    const dia = parts.find(p => p.type === 'day').value;
+    
+    // Constrói a data de hoje no formato YYYY-MM-DD
+    const hojeEmSaoPaulo = `${ano}-${mes}-${dia}`;
+
     let proximaRotaEncontrada = null;
     let historicoRotas = [];
 
+    // Ordenar a programação por horário para garantir a lógica correta
     const programacaoOrdenada = [...programacao].sort((a, b) => a[0].localeCompare(b[0]));
 
     for (const rota of programacaoOrdenada) {
-        const [hora, minuto] = rota[0].split(':');
-        const horarioRotaHoje = getSaoPauloTime();
-        horarioRotaHoje.setHours(parseInt(hora, 10), parseInt(minuto, 10), 0, 0);
-
+        const horario = rota[0]; // ex: "19:00"
         const nomeRota = rota[1];
-        const horarioSaida = `Saída às ${rota[0]}`;
+        const horarioSaida = `Saída às ${horario}`;
+        
+        // Cria uma data completa e fiável para o horário da rota de hoje em SP.
+        // O formato 'YYYY-MM-DDTHH:mm:ss-03:00' especifica o fuso horário de São Paulo (UTC-3).
+        const horarioRotaHoje = new Date(`${hojeEmSaoPaulo}T${horario}:00-03:00`);
 
         if (horarioRotaHoje < agora) {
+            // Se o horário da rota já passou, adiciona ao histórico
             historicoRotas.unshift({ nome: nomeRota, horario: horarioSaida });
         } else if (!proximaRotaEncontrada) {
+            // Se ainda não achamos a próxima rota e esta é no futuro, ela é a próxima
             proximaRotaEncontrada = { nome: nomeRota, horario: horarioSaida };
         }
     }
-
+    
+    // Se todas as rotas já passaram, a próxima é a primeira do array (a mais cedo).
+    // A lógica de virada de dia está implícita aqui, pois `horarioRotaHoje` será sempre menor que `agora`.
     if (!proximaRotaEncontrada && programacaoOrdenada.length > 0) {
         const primeiraRota = programacaoOrdenada[0];
         proximaRotaEncontrada = {
@@ -48,33 +65,35 @@ function calcularStatusRotas() {
         };
     }
     
+    // Caso de fallback se não houver nenhuma programação
     if (!proximaRotaEncontrada) {
        proximaRotaEncontrada = { nome: 'Nenhuma rota programada.', horario: '' };
     }
 
+    // Limita o histórico para os últimos 10
     if (historicoRotas.length > 10) {
         historicoRotas = historicoRotas.slice(0, 10);
     }
     
     return {
         proxima: proximaRotaEncontrada,
-        passadas: historicoRotas
+        passadas: historicoRotas.reverse() // Invertemos para mostrar do mais antigo para o mais novo
     };
 }
 
-// REMOVEMOS a linha app.use(express.static('public'));
 
-// CRIAÇÃO DO ENDPOINT DA API
+// Endpoint da API. Quando o frontend chamar /api/status, este código será executado.
 app.get('/api/status', (req, res) => {
-    const status = calcularStatusRotas();
-    res.json(status);
+    try {
+        const status = calcularStatusRotas();
+        res.status(200).json(status);
+    } catch (error) {
+        // Se algo der errado, envia uma resposta de erro clara
+        console.error("Erro ao calcular rotas:", error);
+        res.status(500).json({ error: "Erro interno do servidor.", message: error.message });
+    }
 });
 
-// A Vercel não usa o app.listen. Em vez disso, exportamos o app.
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT} para testes locais.`);
-});
 
-// ESSA LINHA É A MAIS IMPORTANTE PARA A VERCEL
+// Exportamos o app para a Vercel.
 module.exports = app;
