@@ -1,21 +1,114 @@
-// server.js - VERSÃO DE TESTE MÍNIMA
+// server.js - VERSÃO FINAL DE PRODUÇÃO
+
+// Capturadores de erros fatais para garantir que vejamos qualquer problema
+process.on('uncaughtException', (err, origin) => {
+    console.error(`\n\nFATAL ERROR - UNCAUGHT EXCEPTION!\n`, { err, origin });
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error(`\n\nFATAL ERROR - UNHANDLED REJECTION!\n`, { reason, promise });
+});
 
 const express = require('express');
+const http = require('http');
+const { Server } = require("socket.io");
+
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
 const PORT = process.env.PORT || 1000;
 
-// A única rota que existe é a de verificação de saúde.
+// Sua programação completa
+const programacao = [
+    ['19:00', 'ROTA 069/072'],
+    ['20:30', 'ROTA 039'],
+    ['22:00', 'ROTA 068/081-043/049'],
+    ['23:00', 'ROTA 029/055/026'],
+    ['23:50', 'ROTA 030/086'],
+    ['00:00', 'ROTA 035/037'],
+    ['00:15', 'ROTA 045/076'],
+    ['01:30', 'ROTA 007/036'],
+    ['02:30', 'ROTA 064/066'],
+    ['03:40', 'ROTA 044'],
+    ['04:00', 'ROTA 033/038'],
+    ['05:00', 'ROTA 006/034']
+];
+
+// Serve os arquivos da pasta 'public'
+app.use(express.static('public'));
+
+// Rota de verificação de saúde para a Railway
 app.get('/health', (req, res) => {
-  // Adicionamos um log para sabermos se a Railway está chamando esta rota.
-  console.log('>>> Rota /health foi chamada com sucesso!'); 
-  res.status(200).send('Servidor de teste está OK');
+  res.status(200).send('OK');
 });
 
-// Uma rota principal para vermos algo no navegador.
-app.get('/', (req, res) => {
-    res.send('<h1>Servidor de Teste no Ar</h1><p>Se você está vendo isso, o deploy funcionou.</p>');
+// Lógica principal da aplicação
+let rotaAtual = { nome: 'Aguardando...', horario: '' };
+let rotasPassadas = [];
+let horarioProximaRota = null;
+
+function verificarProximaRota() {
+    try {
+        const agora = new Date();
+        let proximaRotaEncontrada = null;
+        horarioProximaRota = null;
+        const programacaoOrdenada = [...programacao].sort((a, b) => a[0].localeCompare(b[0]));
+
+        for (const rota of programacaoOrdenada) {
+            const [hora, minuto] = rota[0].split(':');
+            const horarioRotaHoje = new Date();
+            horarioRotaHoje.setHours(hora, minuto, 0, 0);
+            if (horarioRotaHoje >= agora) {
+                proximaRotaEncontrada = { nome: rota[1], horario: `Saída às ${rota[0]}` };
+                horarioProximaRota = horarioRotaHoje;
+                break;
+            }
+        }
+
+        if (horarioProximaRota === null && programacaoOrdenada.length > 0) {
+            const primeiraRotaDoDia = programacaoOrdenada[0];
+            const [hora, minuto] = primeiraRotaDoDia[0].split(':');
+            const horarioRotaAmanha = new Date();
+            horarioRotaAmanha.setDate(agora.getDate() + 1);
+            horarioRotaAmanha.setHours(hora, minuto, 0, 0);
+            proximaRotaEncontrada = { nome: primeiraRotaDoDia[1], horario: `Saída às ${primeiraRotaDoDia[0]}` };
+            horarioProximaRota = horarioRotaAmanha;
+            if (rotasPassadas.length > 0) {
+                rotasPassadas = [];
+            }
+        }
+
+        if (proximaRotaEncontrada === null) {
+            proximaRotaEncontrada = { nome: 'Nenhuma rota na programação.', horario: '' };
+        }
+
+        const contagemMs = horarioProximaRota ? horarioProximaRota.getTime() - agora.getTime() : null;
+
+        if (rotaAtual.nome !== proximaRotaEncontrada.nome) {
+            if (!rotaAtual.nome.includes('Aguardando...') && !rotaAtual.nome.includes('Nenhuma rota')) {
+                rotasPassadas.unshift(rotaAtual);
+            }
+            rotaAtual = proximaRotaEncontrada;
+            console.log(`[ATUALIZAÇÃO DE ROTA] Próxima: ${rotaAtual.nome}`);
+        }
+
+        io.emit('atualizar-painel', {
+            proxima: rotaAtual,
+            passadas: rotasPassadas,
+            contagemRegressiva: contagemMs
+        });
+    } catch (error) {
+        console.error("ERRO CRÍTICO na função verificarProximaRota:", error);
+    }
+}
+
+io.on('connection', (socket) => {
+    console.log('Um painel se conectou!');
+    verificarProximaRota();
 });
 
-app.listen(PORT, () => {
-  console.log(`>>> SERVIDOR DE TESTE MÍNIMO rodando na porta ${PORT}.`);
+server.listen(PORT, () => {
+    console.log(`Servidor de produção rodando na porta ${PORT}.`);
+    // Otimização: vamos verificar a cada 2 segundos em vez de 1. É mais leve para o servidor.
+    setInterval(verificarProximaRota, 2000); 
 });
