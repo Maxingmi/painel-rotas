@@ -1,181 +1,101 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <title>Painel de Rotas</title>
-    <style>
-        body {
-            background-color: #1a1a2e;
-            color: #e0e0e0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            text-align: center;
-            overflow: hidden;
-        }
+// server.js - Versão "Blindada"
 
-        #painel-principal {
-            background-color: #16213e;
-            padding: 40px 60px;
-            border-radius: 15px;
-            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
-            width: 80%;
-            max-width: 900px;
-            /* ### NOVO ### Adicionado transição para suavizar a mudança de cor */
-            transition: background-color 0.5s ease;
-        }
+const express = require('express');
+const http = require('http');
+// ... (resto dos seus requires)
 
-        #rota {
-            font-size: 8vw; /* Reduzido para caber o cronômetro */
-            font-weight: bold;
-            color: #fca311;
-            line-height: 1;
-        }
+// ... (código do app, server, io, PORT, programacao)
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+const PORT = process.env.PORT || 1000;
+const programacao = [
+    ['19:00', 'ROTA 069/072'],
+    ['20:30', 'ROTA 039'],
+    ['22:00', 'ROTA 068/081-043/049'],
+    ['23:00', 'ROTA 029/055/026'],
+    ['23:50', 'ROTA 030/086'],
+    ['00:00', 'ROTA 035/037'],
+    ['00:15', 'ROTA 045/076'],
+    ['01:30', 'ROTA 007/036'],
+    ['02:30', 'ROTA 064/066'],
+    ['03:40', 'ROTA 044'],
+    ['04:00', 'ROTA 033/038'],
+    ['05:00', 'ROTA 006/034']
+];
 
-        #horario {
-            font-size: 4vw;
-            color: #ffffff;
-            margin-top: 15px;
-        }
+app.use(express.static('public'));
 
-        /* ### NOVO ### Estilo para o cronômetro */
-        #contagem-regressiva {
-            font-size: 5vw;
-            font-weight: bold;
-            color: #00ffdd;
-            margin-top: 25px;
-            min-height: 6vw; /* Garante que o layout não pule */
-        }
-        
-        /* ### NOVO ### Animação de piscar */
-        @keyframes piscar-vermelho {
-            0%, 100% { background-color: #e63946; } /* Vermelho alerta */
-            50% { background-color: #16213e; } /* Cor de fundo original */
-        }
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
 
-        /* ### NOVO ### Classe que ativa a animação */
-        .alerta-piscando {
-            animation: piscar-vermelho 1.5s infinite;
-        }
+let rotaAtual = { nome: 'Aguardando...', horario: '' };
+let rotasPassadas = [];
+let horarioProximaRota = null;
 
-        #historico {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            background-color: rgba(0, 0, 0, 0.2);
-            padding: 15px;
-            border-radius: 10px;
-            text-align: left;
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-
-        #historico h3 {
-            margin-top: 0;
-            font-size: 1.5em;
-            color: #fca311;
-            border-bottom: 2px solid #fca311;
-            padding-bottom: 5px;
-        }
-
-        #lista-historico {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-        
-        #lista-historico li {
-            font-size: 1.2em;
-            opacity: 0.7;
-            padding: 5px 0;
-            border-bottom: 1px solid #3a3a5e;
-        }
-
-        #lista-historico li:last-child {
-            border-bottom: none;
-        }
-    </style>
-</head>
-<body>
-
-    <div id="historico">
-        <h3>Anunciadas</h3>
-        <ul id="lista-historico">
-        </ul>
-    </div>
-
-    <div id="painel-principal">
-        <div id="rota">--</div>
-        <div id="horario">--</div>
-        <div id="contagem-regressiva"></div>
-    </div>
-
-    <script src="/socket.io/socket.io.js"></script>
-    <script>
-        const socket = io();
-
-        const rotaEl = document.getElementById('rota');
-        const horarioEl = document.getElementById('horario');
-        const listaHistoricoEl = document.getElementById('lista-historico');
-        
-        // ### NOVO ### Selecionando os novos elementos
-        const contagemEl = document.getElementById('contagem-regressiva');
-        const painelPrincipalEl = document.getElementById('painel-principal');
-        const VINTE_MINUTOS_EM_MS = 20 * 60 * 1000;
-
-        // ### NOVO ### Função para formatar milissegundos em HH:MM:SS
-        function formatarTempo(ms) {
-            if (ms < 0) ms = 0;
-            
-            let totalSegundos = Math.floor(ms / 1000);
-            let horas = Math.floor(totalSegundos / 3600);
-            let minutos = Math.floor((totalSegundos % 3600) / 60);
-            let segundos = totalSegundos % 60;
-
-            // Adiciona um zero à esquerda se for menor que 10
-            const pad = (num) => String(num).padStart(2, '0');
-
-            return `${pad(horas)}:${pad(minutos)}:${pad(segundos)}`;
-        }
-
-        socket.on('atualizar-painel', (dados) => {
-            // 1. Atualiza o painel principal
-            const proxima = dados.proxima;
-            rotaEl.textContent = proxima.nome;
-            horarioEl.textContent = proxima.horario;
-
-            // 2. Limpa e atualiza a lista de histórico
-            listaHistoricoEl.innerHTML = ''; 
-            const passadas = dados.passadas;
-            passadas.forEach(rota => {
-                const li = document.createElement('li');
-                li.textContent = `${rota.horario.replace('Saída às ', '')} - ${rota.nome}`;
-                listaHistoricoEl.appendChild(li);
-            });
-
-            // ### NOVO ### Lógica do cronômetro e do alerta
-            const contagemMs = dados.contagemRegressiva;
-
-            if (contagemMs !== null && contagemMs > 0) {
-                // Se existe uma contagem, exibe o cronômetro
-                contagemEl.textContent = formatarTempo(contagemMs);
-
-                // Verifica se falta menos de 20 minutos
-                if (contagemMs <= VINTE_MINUTOS_EM_MS) {
-                    painelPrincipalEl.classList.add('alerta-piscando');
-                } else {
-                    painelPrincipalEl.classList.remove('alerta-piscando');
-                }
-            } else {
-                // Se não há próxima rota, limpa o cronômetro e o alerta
-                contagemEl.textContent = '';
-                painelPrincipalEl.classList.remove('alerta-piscando');
+function verificarProximaRota() {
+    // ############# MUDANÇA AQUI #############
+    try {
+        const agora = new Date();
+        // ... (todo o resto da sua lógica de rotas fica aqui dentro)
+        let proximaRotaEncontrada = null;
+        horarioProximaRota = null;
+        const programacaoOrdenada = [...programacao].sort((a, b) => a[0].localeCompare(b[0]));
+        for (const rota of programacaoOrdenada) {
+            const [hora, minuto] = rota[0].split(':');
+            const horarioRotaHoje = new Date();
+            horarioRotaHoje.setHours(hora, minuto, 0, 0);
+            if (horarioRotaHoje >= agora) {
+                proximaRotaEncontrada = { nome: rota[1], horario: `Saída às ${rota[0]}` };
+                horarioProximaRota = horarioRotaHoje;
+                break;
             }
+        }
+        if (horarioProximaRota === null && programacaoOrdenada.length > 0) {
+            const primeiraRotaDoDia = programacaoOrdenada[0];
+            const [hora, minuto] = primeiraRotaDoDia[0].split(':');
+            const horarioRotaAmanha = new Date();
+            horarioRotaAmanha.setDate(agora.getDate() + 1);
+            horarioRotaAmanha.setHours(hora, minuto, 0, 0);
+            proximaRotaEncontrada = { nome: primeiraRotaDoDia[1], horario: `Saída às ${primeiraRotaDoDia[0]}` };
+            horarioProximaRota = horarioRotaAmanha;
+            if (rotasPassadas.length > 0) {
+                rotasPassadas = [];
+            }
+        }
+        if (proximaRotaEncontrada === null) {
+            proximaRotaEncontrada = { nome: 'Nenhuma rota na programação.', horario: '' };
+        }
+        const contagemMs = horarioProximaRota ? horarioProximaRota.getTime() - agora.getTime() : null;
+        if (rotaAtual.nome !== proximaRotaEncontrada.nome) {
+            if (!rotaAtual.nome.includes('Aguardando...') && !rotaAtual.nome.includes('Nenhuma rota')) {
+                rotasPassadas.unshift(rotaAtual);
+            }
+            rotaAtual = proximaRotaEncontrada;
+            console.log(`[ATUALIZAÇÃO DE ROTA] Próxima: ${rotaAtual.nome}`);
+        }
+        io.emit('atualizar-painel', {
+            proxima: rotaAtual,
+            passadas: rotasPassadas,
+            contagemRegressiva: contagemMs
         });
-    </script>
 
-</body>
-</html>
+    } catch (error) {
+        // Se qualquer erro acontecer na lógica acima, ele será capturado aqui
+        console.error("ERRO na função verificarProximaRota:", error);
+        // O servidor não vai travar e continuará respondendo ao /health
+    }
+    // #########################################
+}
+
+// ... (resto do seu código, io.on, server.listen)
+io.on('connection', (socket) => {
+    console.log('Um painel se conectou!');
+    verificarProximaRota();
+});
+
+server.listen(PORT, () => {
+    console.log(`Servidor rodando na porta ${PORT}.`);
+    setInterval(verificarProximaRota, 1000); 
+});
