@@ -1,14 +1,29 @@
-// server.js - Versão "Blindada"
+// server.js - Versão Final Corrigida
 
+// Capturadores de erros fatais
+process.on('uncaughtException', (err, origin) => {
+    console.error(`\n\nFATAL ERROR - UNCAUGHT EXCEPTION!\n`);
+    console.error(`Error:`, err);
+    console.error(`Origin:`, origin);
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error(`\n\nFATAL ERROR - UNHANDLED REJECTION!\n`);
+    console.error(`Reason:`, reason);
+});
+
+// ############# A CORREÇÃO ESTÁ AQUI #############
+// Garantindo que TODAS as importações necessárias estão presentes
 const express = require('express');
 const http = require('http');
-// ... (resto dos seus requires)
+const { Server } = require("socket.io"); // Esta linha era a que estava faltando/incorreta
+// ###############################################
 
-// ... (código do app, server, io, PORT, programacao)
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server); // Agora 'Server' é reconhecido
+
 const PORT = process.env.PORT || 1000;
+
 const programacao = [
     ['19:00', 'ROTA 069/072'],
     ['20:30', 'ROTA 039'],
@@ -30,15 +45,14 @@ app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
 
+// O resto do seu código, que já estava bom
 let rotaAtual = { nome: 'Aguardando...', horario: '' };
 let rotasPassadas = [];
 let horarioProximaRota = null;
 
 function verificarProximaRota() {
-    // ############# MUDANÇA AQUI #############
     try {
         const agora = new Date();
-        // ... (todo o resto da sua lógica de rotas fica aqui dentro)
         let proximaRotaEncontrada = null;
         horarioProximaRota = null;
         const programacaoOrdenada = [...programacao].sort((a, b) => a[0].localeCompare(b[0]));
@@ -80,16 +94,11 @@ function verificarProximaRota() {
             passadas: rotasPassadas,
             contagemRegressiva: contagemMs
         });
-
     } catch (error) {
-        // Se qualquer erro acontecer na lógica acima, ele será capturado aqui
         console.error("ERRO na função verificarProximaRota:", error);
-        // O servidor não vai travar e continuará respondendo ao /health
     }
-    // #########################################
 }
 
-// ... (resto do seu código, io.on, server.listen)
 io.on('connection', (socket) => {
     console.log('Um painel se conectou!');
     verificarProximaRota();
@@ -97,5 +106,5 @@ io.on('connection', (socket) => {
 
 server.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}.`);
-    setInterval(verificarProximaRota, 1000); 
+    setInterval(verificarProximaRota, 1000);
 });
