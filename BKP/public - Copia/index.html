@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Painel de Rotas</title>
+    <style>
+        /* O CSS é exatamente o mesmo da solução anterior para manter o visual */
+        body {
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+            overflow: hidden;
+        }
+        #painel {
+            background-color: #16213e;
+            padding: 40px 60px;
+            border-radius: 15px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+            width: 80%;
+            max-width: 900px;
+        }
+        #rota {
+            font-size: 12vw;
+            font-weight: bold;
+            color: #fca311;
+            line-height: 1;
+        }
+        #horario {
+            font-size: 6vw;
+            color: #ffffff;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="painel">
+        <div id="rota">--</div>
+        <div id="horario">--</div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Conecta ao nosso servidor Node.js
+        const socket = io();
+
+        const rotaEl = document.getElementById('rota');
+        const horarioEl = document.getElementById('horario');
+
+        // Fica "ouvindo" o evento 'atualizar-painel' que o servidor envia
+        socket.on('atualizar-painel', (dados) => {
+            console.log('Recebi uma atualização do servidor:', dados);
+            // Atualiza o texto na tela com os dados recebidos
+            rotaEl.textContent = dados.nome;
+            horarioEl.textContent = dados.horario;
+        });
+    </script>
+
+</body>
+</html>
