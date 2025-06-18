@@ -11,5 +11,8 @@
       "source": "/api/(.*)",
       "destination": "/server.js"
     }
-  ]
+  ],
+  "dependencies": {
+    "date-fns-tz": "^3.2.0"
+  }
 }
