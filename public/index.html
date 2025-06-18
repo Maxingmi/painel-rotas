@@ -2,17 +2,26 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel de Rotas</title>
     <style>
         body { background-color: #1a1a2e; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; text-align: center; overflow: hidden; }
-        #painel-principal { background-color: #16213e; padding: 40px 60px; border-radius: 15px; box-shadow: 0 0 30px rgba(0,0,0,0.5); width: 80%; max-width: 900px; }
-        #rota { font-size: 10vw; font-weight: bold; color: #fca311; line-height: 1; }
-        #horario { font-size: 5vw; color: #ffffff; margin-top: 15px; }
-        #historico { position: absolute; top: 20px; left: 20px; background-color: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px; text-align: left; max-height: 90vh; overflow-y: auto; }
-        #historico h3 { margin-top: 0; font-size: 1.5em; color: #fca311; border-bottom: 2px solid #fca311; padding-bottom: 5px; }
+        .container { display: flex; flex-direction: column; align-items: center; }
+        #painel-principal { background-color: #16213e; padding: 20px 30px; border-radius: 15px; box-shadow: 0 0 30px rgba(0,0,0,0.5); width: 90vw; max-width: 900px; margin-top: 20px;}
+        #rota { font-size: clamp(2rem, 10vw, 6rem); font-weight: bold; color: #fca311; line-height: 1.2; word-wrap: break-word; }
+        #horario { font-size: clamp(1.5rem, 5vw, 3rem); color: #ffffff; margin-top: 15px; }
+        #historico { position: absolute; top: 10px; left: 10px; background-color: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; text-align: left; max-height: calc(100vh - 40px); overflow-y: auto; }
+        #historico h3 { margin-top: 0; font-size: 1.2em; color: #fca311; border-bottom: 2px solid #fca311; padding-bottom: 5px; }
         #lista-historico { list-style: none; padding: 0; margin: 0; }
-        #lista-historico li { font-size: 1.2em; opacity: 0.7; padding: 5px 0; border-bottom: 1px solid #3a3a5e; }
+        #lista-historico li { font-size: 1em; opacity: 0.8; padding: 5px 0; border-bottom: 1px solid #3a3a5e; }
         #lista-historico li:last-child { border-bottom: none; }
+        
+        /* Media query para telas menores */
+        @media (max-width: 600px) {
+            #historico { position: relative; width: 90vw; max-width: 900px; order: 2; top: 0; left: 0; margin-top: 20px; max-height: 200px; }
+            .container { padding: 10px; }
+            #painel-principal { order: 1; }
+        }
     </style>
 </head>
 <body>
@@ -20,32 +29,58 @@
         <h3>Anunciadas</h3>
         <ul id="lista-historico"></ul>
     </div>
-    <div id="painel-principal">
-        <div id="rota">--</div>
-        <div id="horario">--</div>
+    <div class="container">
+        <div id="painel-principal">
+            <div id="rota">--</div>
+            <div id="horario">--</div>
+        </div>
     </div>
-
-    <script src="/socket.io/socket.io.js"></script>
+    
+    <!-- NÃO PRECISAMOS MAIS DO SOCKET.IO -->
     <script>
-        const socket = io();
-
         const rotaEl = document.getElementById('rota');
         const horarioEl = document.getElementById('horario');
         const listaHistoricoEl = document.getElementById('lista-historico');
 
-        socket.on('atualizar-painel', (dados) => {
-            // Atualiza o painel principal
-            rotaEl.textContent = dados.proxima.nome;
-            horarioEl.textContent = dados.proxima.horario;
+        // Função para buscar os dados da nossa nova API
+        async function buscarDados() {
+            try {
+                // O fetch vai chamar a URL /api/status no mesmo domínio (o seu da Vercel)
+                const response = await fetch('/api/status');
+                
+                // Se a resposta não for OK (ex: erro 500), lança um erro
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const dados = await response.json();
 
-            // Limpa e atualiza a lista de histórico
-            listaHistoricoEl.innerHTML = '';
-            dados.passadas.forEach(rota => {
-                const li = document.createElement('li');
-                li.textContent = `${rota.horario.replace('Saída às ', '')} - ${rota.nome}`;
-                listaHistoricoEl.appendChild(li);
-            });
-        });
+                // Atualiza o painel principal
+                rotaEl.textContent = dados.proxima.nome;
+                horarioEl.textContent = dados.proxima.horario;
+
+                // Limpa e atualiza a lista de histórico
+                listaHistoricoEl.innerHTML = '';
+                dados.passadas.forEach(rota => {
+                    const li = document.createElement('li');
+                    li.textContent = `${rota.horario.replace('Saída às ', '')} - ${rota.nome}`;
+                    listaHistoricoEl.appendChild(li);
+                });
+
+            } catch (error) {
+                // Se der erro na busca, exibe uma mensagem no painel
+                console.error("Falha ao buscar dados:", error);
+                rotaEl.textContent = "Erro de conexão";
+                horarioEl.textContent = "Tente recarregar a página";
+            }
+        }
+
+        // Roda a função uma vez assim que a página carrega
+        buscarDados();
+
+        // E agenda para rodar novamente a cada 5 segundos (5000 milissegundos)
+        setInterval(buscarDados, 5000);
     </script>
 </body>
 </html>
+
