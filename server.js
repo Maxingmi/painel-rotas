@@ -1,12 +1,8 @@
-// server.js - VERSÃO FINAL DE PRODUÇÃO
+// server.js - Teste de Isolamento (desativando o loop)
 
-// Capturadores de erros fatais para garantir que vejamos qualquer problema
-process.on('uncaughtException', (err, origin) => {
-    console.error(`\n\nFATAL ERROR - UNCAUGHT EXCEPTION!\n`, { err, origin });
-});
-process.on('unhandledRejection', (reason, promise) => {
-    console.error(`\n\nFATAL ERROR - UNHANDLED REJECTION!\n`, { reason, promise });
-});
+// Capturadores de erros fatais
+process.on('uncaughtException', (err, origin) => { console.error(`FATAL ERROR - UNCAUGHT EXCEPTION!`, { err, origin }); });
+process.on('unhandledRejection', (reason, promise) => { console.error(`FATAL ERROR - UNHANDLED REJECTION!`, { reason, promise }); });
 
 const express = require('express');
 const http = require('http');
@@ -18,42 +14,21 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 1000;
 
-// Sua programação completa
-const programacao = [
-    ['19:00', 'ROTA 069/072'],
-    ['20:30', 'ROTA 039'],
-    ['22:00', 'ROTA 068/081-043/049'],
-    ['23:00', 'ROTA 029/055/026'],
-    ['23:50', 'ROTA 030/086'],
-    ['00:00', 'ROTA 035/037'],
-    ['00:15', 'ROTA 045/076'],
-    ['01:30', 'ROTA 007/036'],
-    ['02:30', 'ROTA 064/066'],
-    ['03:40', 'ROTA 044'],
-    ['04:00', 'ROTA 033/038'],
-    ['05:00', 'ROTA 006/034']
-];
+const programacao = [ /* Sua programação aqui... */ ];
 
-// Serve os arquivos da pasta 'public'
 app.use(express.static('public'));
 
-// Rota de verificação de saúde para a Railway
 app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
 
-// Lógica principal da aplicação
-let rotaAtual = { nome: 'Aguardando...', horario: '' };
-let rotasPassadas = [];
-let horarioProximaRota = null;
-
+// A função existe, mas não será chamada em loop
 function verificarProximaRota() {
     try {
         const agora = new Date();
         let proximaRotaEncontrada = null;
-        horarioProximaRota = null;
+        let horarioProximaRota = null;
         const programacaoOrdenada = [...programacao].sort((a, b) => a[0].localeCompare(b[0]));
-
         for (const rota of programacaoOrdenada) {
             const [hora, minuto] = rota[0].split(':');
             const horarioRotaHoje = new Date();
@@ -64,7 +39,6 @@ function verificarProximaRota() {
                 break;
             }
         }
-
         if (horarioProximaRota === null && programacaoOrdenada.length > 0) {
             const primeiraRotaDoDia = programacaoOrdenada[0];
             const [hora, minuto] = primeiraRotaDoDia[0].split(':');
@@ -77,24 +51,15 @@ function verificarProximaRota() {
                 rotasPassadas = [];
             }
         }
-
         if (proximaRotaEncontrada === null) {
             proximaRotaEncontrada = { nome: 'Nenhuma rota na programação.', horario: '' };
         }
-
         const contagemMs = horarioProximaRota ? horarioProximaRota.getTime() - agora.getTime() : null;
-
-        if (rotaAtual.nome !== proximaRotaEncontrada.nome) {
-            if (!rotaAtual.nome.includes('Aguardando...') && !rotaAtual.nome.includes('Nenhuma rota')) {
-                rotasPassadas.unshift(rotaAtual);
-            }
-            rotaAtual = proximaRotaEncontrada;
-            console.log(`[ATUALIZAÇÃO DE ROTA] Próxima: ${rotaAtual.nome}`);
-        }
-
+        let rotaAtual = proximaRotaEncontrada;
+        
         io.emit('atualizar-painel', {
             proxima: rotaAtual,
-            passadas: rotasPassadas,
+            passadas: [],
             contagemRegressiva: contagemMs
         });
     } catch (error) {
@@ -104,11 +69,14 @@ function verificarProximaRota() {
 
 io.on('connection', (socket) => {
     console.log('Um painel se conectou!');
+    // A função roda uma vez quando o usuário conecta
     verificarProximaRota();
 });
 
 server.listen(PORT, () => {
-    console.log(`Servidor de produção rodando na porta ${PORT}.`);
-    // Otimização: vamos verificar a cada 2 segundos em vez de 1. É mais leve para o servidor.
-    setInterval(verificarProximaRota, 2000); 
+    console.log(`>>> SERVIDOR COMPLETO (TESTE SEM INTERVAL) rodando na porta ${PORT}.`);
+    // ############# A MUDANÇA ESTÁ AQUI #############
+    // A linha abaixo foi desativada para este teste.
+    // setInterval(verificarProximaRota, 2000); 
+    // ##############################################
 });
