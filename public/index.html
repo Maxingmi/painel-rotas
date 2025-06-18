@@ -1,13 +1,29 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-g">
+    <meta charset="UTF-8">
     <title>Painel de Rotas</title>
-    <style> /* ... SEU CSS COMPLETO AQUI ... */ </style>
+    <style>
+        body { background-color: #1a1a2e; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; text-align: center; overflow: hidden; }
+        #painel-principal { background-color: #16213e; padding: 40px 60px; border-radius: 15px; box-shadow: 0 0 30px rgba(0,0,0,0.5); width: 80%; max-width: 900px; }
+        #rota { font-size: 10vw; font-weight: bold; color: #fca311; line-height: 1; }
+        #horario { font-size: 5vw; color: #ffffff; margin-top: 15px; }
+        #historico { position: absolute; top: 20px; left: 20px; background-color: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px; text-align: left; max-height: 90vh; overflow-y: auto; }
+        #historico h3 { margin-top: 0; font-size: 1.5em; color: #fca311; border-bottom: 2px solid #fca311; padding-bottom: 5px; }
+        #lista-historico { list-style: none; padding: 0; margin: 0; }
+        #lista-historico li { font-size: 1.2em; opacity: 0.7; padding: 5px 0; border-bottom: 1px solid #3a3a5e; }
+        #lista-historico li:last-child { border-bottom: none; }
+    </style>
 </head>
 <body>
-    <div id="historico"><h3>Anunciadas</h3><ul id="lista-historico"></ul></div>
-    <div id="painel-principal"><div id="rota">--</div><div id="horario">--</div><div id="contagem-regressiva"></div></div>
+    <div id="historico">
+        <h3>Anunciadas</h3>
+        <ul id="lista-historico"></ul>
+    </div>
+    <div id="painel-principal">
+        <div id="rota">--</div>
+        <div id="horario">--</div>
+    </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
@@ -16,56 +32,19 @@
         const rotaEl = document.getElementById('rota');
         const horarioEl = document.getElementById('horario');
         const listaHistoricoEl = document.getElementById('lista-historico');
-        const contagemEl = document.getElementById('contagem-regressiva');
-        const painelPrincipalEl = document.getElementById('painel-principal');
-        const VINTE_MINUTOS_EM_MS = 20 * 60 * 1000;
-
-        let cronometroLocal = null; // Variável para controlar nosso cronômetro
-
-        function formatarTempo(ms) {
-            // Sua função formatarTempo continua a mesma
-        }
 
         socket.on('atualizar-painel', (dados) => {
-            console.log("Recebi novos dados do servidor:", dados);
+            // Atualiza o painel principal
+            rotaEl.textContent = dados.proxima.nome;
+            horarioEl.textContent = dados.proxima.horario;
 
-            // Limpa qualquer cronômetro antigo
-            if (cronometroLocal) clearInterval(cronometroLocal);
-
-            // 1. Atualiza o painel principal
-            const proxima = dados.proxima;
-            rotaEl.textContent = proxima.nome;
-            horarioEl.textContent = proxima.horario;
-
-            // 2. Atualiza a lista de histórico
+            // Limpa e atualiza a lista de histórico
             listaHistoricoEl.innerHTML = '';
-            const passadas = dados.passadas;
-            passadas.forEach(rota => { /* ... sua lógica para preencher o histórico ... */ });
-
-            // 3. Inicia a nova contagem regressiva local
-            let contagemMs = dados.contagemRegressiva;
-            if (contagemMs !== null && contagemMs > 0) {
-                cronometroLocal = setInterval(() => {
-                    contagemEl.textContent = formatarTempo(contagemMs);
-
-                    if (contagemMs <= VINTE_MINUTOS_EM_MS) {
-                        painelPrincipalEl.classList.add('alerta-piscando');
-                    } else {
-                        painelPrincipalEl.classList.remove('alerta-piscando');
-                    }
-                    
-                    if (contagemMs <= 0) {
-                        clearInterval(cronometroLocal);
-                        console.log("Cronômetro zerou! Pedindo nova rota ao servidor...");
-                        socket.emit('preciso-de-nova-rota'); // Pede a próxima rota!
-                    }
-
-                    contagemMs -= 1000; // Decrementa 1 segundo
-                }, 1000);
-            } else {
-                contagemEl.textContent = '';
-                painelPrincipalEl.classList.remove('alerta-piscando');
-            }
+            dados.passadas.forEach(rota => {
+                const li = document.createElement('li');
+                li.textContent = `${rota.horario.replace('Saída às ', '')} - ${rota.nome}`;
+                listaHistoricoEl.appendChild(li);
+            });
         });
     </script>
 </body>
