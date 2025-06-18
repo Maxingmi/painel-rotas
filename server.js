@@ -27,6 +27,14 @@ const programacao = [
 
 app.use(express.static('public'));
 
+// ############# CÓDIGO ADICIONADO #############
+// Rota dedicada para a verificação de saúde (Health Check).
+// Responde "OK" de forma rápida para a plataforma de hospedagem.
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+// ##############################################
+
 let rotaAtual = { nome: 'Aguardando...', horario: '' };
 let rotasPassadas = [];
 let horarioProximaRota = null;
